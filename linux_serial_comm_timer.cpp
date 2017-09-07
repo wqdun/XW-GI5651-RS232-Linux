@@ -93,7 +93,7 @@ int set_opt(int fd, int nSpeed, int nBits, char nEvent, int nStop) {
     newtio.c_cc[VTIME] = 100; // time out 15s重要
     newtio.c_cc[VMIN] = 0; // Update the option and do it now 返回的最小值  重要
 
-    if(0 != (tcsetattr(fd, TCSANOW, &newtio))) {
+    if(0 != tcsetattr(fd, TCSANOW, &newtio)) {
         perror("Com setup error.");
         return -1;
     }
@@ -109,13 +109,13 @@ int main(void) {
     int fd1 = open("/dev/ttyS0", O_RDONLY | O_NONBLOCK); // 打开串口 // fd1 = open("/dev/ttyUSB0", O_RDWR);
     if(-1 == fd1) {
         printf("fd1 == -1\n");
-        exit(1);
+        exit 1;
     }
 
     // setup port properties
     int nset1 = set_opt(fd1, 115200, 8, 'N', 1); // 设置串口属性
     if(-1 == nset1) {
-        exit(1);
+        exit 1;
     }
 
     std::string frameBuf;
@@ -131,22 +131,22 @@ int main(void) {
 
         for(int i = 0; i < nread; ++i) {
             switch(buf[i]) {
-                case '$':
-                    clock_gettime(CLOCK_MONOTONIC, &t2);
-                    // cout << "time_end  :" << t2.tv_nsec << endl;
-                    freq = 1000000000 / (t2.tv_nsec - last_time_ns);
-                    cout << "The Freq is: " << freq << endl;
-                    frameBuf = buf[i];
+            case '$':
+                clock_gettime(CLOCK_MONOTONIC, &t2);
+                // cout << "time_end  :" << t2.tv_nsec << endl;
+                freq = 1000000000 / (t2.tv_nsec - last_time_ns);
+                cout << "The Freq is: " << freq << endl;
+                frameBuf = buf[i];
 
-                    clock_gettime(CLOCK_MONOTONIC, &t1);
-                    // cout << "time_start:" << t1.tv_nsec << endl;
-                    last_time_ns = t1.tv_nsec;
-                    break;
-                case '\n':
-                    cout << frameBuf << endl;
-                    break;
-                default:
-                    frameBuf += buf[i];
+                clock_gettime(CLOCK_MONOTONIC, &t1);
+                // cout << "time_start:" << t1.tv_nsec << endl;
+                last_time_ns = t1.tv_nsec;
+                break;
+            case '\n':
+                cout << frameBuf << endl;
+                break;
+            default:
+                frameBuf += buf[i];
             }
         }
     }

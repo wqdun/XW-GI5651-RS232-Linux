@@ -25,35 +25,36 @@ int name_arr[] = {
     38400, 19200, 9600, 4800, 2400, 1200, 300, 38400, 19200, 9600, 4800, 2400, 1200, 300
 };
 
-void set_speed (int fd, int speed) {
-    int i;
+void set_speed(int fd, int speed) {
     int status;
     struct termios Opt;
-    tcgetattr (fd, &Opt);
-    for (i = 0; i < sizeof (speed_arr) / sizeof (int); i++)
-    {
-        if (speed == name_arr[i]) {
-            tcflush (fd, TCIOFLUSH);
-            cfsetispeed (&Opt, speed_arr[i]);
-            cfsetospeed (&Opt, speed_arr[i]);
-            status = tcsetattr (fd, TCSANOW, &Opt);
-            if(0 != status) {
-                perror ("tcsetattr fd1");
-                return;
-            }
-            tcflush (fd, TCIOFLUSH);
+    tcgetattr(fd, &Opt);
+    for(int i = 0; i < sizeof(speed_arr) / sizeof(speed_arr[0]); ++i) {
+        if(speed != name_arr[i]) {
+            continue;
         }
+
+        tcflush(fd, TCIOFLUSH);
+        cfsetispeed(&Opt, speed_arr[i]);
+        cfsetospeed(&Opt, speed_arr[i]);
+        status = tcsetattr(fd, TCSANOW, &Opt);
+        if(0 != status) {
+            perror("Com set speed error.");
+            return;
+        }
+        tcflush(fd, TCIOFLUSH);
     }
 }
 
-int set_Parity (int fd, int databits, int stopbits, int parity) {
-  struct termios options;
-  if(tcgetattr (fd, &options) != 0) {
-        perror ("SetupSerial 1");
-        return (FALSE);
+int set_parity(int fd, int databits, int stopbits, int parity) {
+    struct termios options;
+    if(0 != tcgetattr(fd, &options)) {
+        perror("Setup Serial 1.");
+        return FALSE;
     }
     options.c_cflag &= ~CSIZE;
-    switch (databits) {
+
+    switch(databits) {
     case 7:
         options.c_cflag |= CS7;
         break;
@@ -61,33 +62,35 @@ int set_Parity (int fd, int databits, int stopbits, int parity) {
         options.c_cflag |= CS8;
         break;
     default:
-        fprintf (stderr, "Unsupported data size\n");
-        return (FALSE);
+        fprintf(stderr, "Unsupported data size.\n");
+        return FALSE;
     }
+
     switch(parity) {
     case 'n':
     case 'N':
-        options.c_cflag &= ~PARENB;   /* Clear parity enable */
-        options.c_iflag &= ~INPCK;    /* Enable parity checking */
+        options.c_cflag &= ~PARENB; /* Clear parity enable */
+        options.c_iflag &= ~INPCK;  /* Enable parity checking */
         break;
     case 'o':
     case 'O':
         options.c_cflag |= (PARODD | PARENB);
-        options.c_iflag |= INPCK; /* Disnable parity checking */
+        options.c_iflag |= INPCK;   /* Disnable parity checking */
         break;
     case 'e':
     case 'E':
-        options.c_cflag |= PARENB;    /* Enable parity */
+        options.c_cflag |= PARENB;  /* Enable parity */
         options.c_cflag &= ~PARODD;
-        options.c_iflag |= INPCK; /* Disnable parity checking */
+        options.c_iflag |= INPCK;   /* Disnable parity checking */
         break;
     case 'S':
-    case 's':           /*as no parity */
+    case 's':                       /* as no parity */
         options.c_cflag &= ~PARENB;
         options.c_cflag &= ~CSTOPB;
+        options.c_iflag |= INPCK;
         break;
     default:
-        fprintf (stderr, "Unsupported parity\n");
+        fprintf(stderr, "Unsupported parity.\n");
         return FALSE;
     }
 
@@ -99,25 +102,22 @@ int set_Parity (int fd, int databits, int stopbits, int parity) {
         options.c_cflag |= CSTOPB;
         break;
     default:
-        fprintf (stderr, "Unsupported stop bits\n");
-        return (FALSE);
+        fprintf(stderr, "Unsupported stop bits.\n");
+        return FALSE;
     }
-    /* Set input parity option */
-    if(parity != 'n') {
-        options.c_iflag |= INPCK;
-    }
-    tcflush (fd, TCIFLUSH);
+
+    tcflush(fd, TCIFLUSH);
     options.c_cc[VTIME] = 150;
-    options.c_cc[VMIN] = 0;   /* Update the options and do it NOW */
-    if (tcsetattr (fd, TCSANOW, &options) != 0) {
-      perror("SetupSerial 3");
-      return FALSE;
+    options.c_cc[VMIN] = 0;         /* Update the options and do it NOW */
+    if(0 != tcsetattr (fd, TCSANOW, &options)) {
+        perror("Com set parity error.");
+        return FALSE;
     }
     return TRUE;
 }
 
 void signal_handler_IO(int status) {
-    printf("received SIGIO signale.\n");
+    printf("Received SIGIO signal.\n");
     wait_flag = noflag;
 }
 
@@ -126,45 +126,51 @@ int main(){
     printf("STDIO COM1\n");
     int fd;
     struct sigaction saio;
-    fd = open("/dev/ttyS0", O_RDWR);
+
+    fd = open("/dev/ttyS0", O_RDONLY | O_NONBLOCK);
     if(-1 == fd) {
-      perror("serialport error\n");
+        perror("Failed to open serial port.\n");
+        exit 1;
     }
-    else {
-        printf ("open ");
-        printf ("%s", ttyname (fd));
-        printf ("succesfully\n");
-    }
+    printf("Open ");
+    printf("%s", ttyname(fd));
+    printf("successfully.\n");
 
     saio.sa_handler = signal_handler_IO;
-    sigemptyset (&saio.sa_mask);
+    sigemptyset(&saio.sa_mask);
     saio.sa_flags = 0;
     saio.sa_restorer = NULL;
-    sigaction (SIGIO, &saio, NULL);
+    sigaction(SIGIO, &saio, NULL);
 
     //allow the process to receive SIGIO
-    fcntl (fd, F_SETOWN, getpid ());
+    fcntl(fd, F_SETOWN, getpid());
     //make the file descriptor asynchronous
-    fcntl (fd, F_SETFL, FASYNC);
+    fcntl(fd, F_SETFL, FASYNC);
 
-    set_speed (fd, 115200);
-    if(FALSE == set_Parity(fd, 8, 1, 'N')) {
-        printf("Set Parity Error\n");
-        exit 0;
+    set_speed(fd, 115200);
+    if(FALSE == set_parity(fd, 8, 1, 'N')) {
+        printf("Failed to set parity error.\n");
+        exit 1;
     }
 
-    char buf[255];
+    char buf[1024];
     while(0 == STOP) {
-        usleep(100000);
-        /* after receving SIGIO ,wait_flag = FALSE,input is availabe and can be read */
-        if(wait_flag == 0) {
-        memset(buf, 0, sizeof(buf));
-        res = read (fd, buf, 255);
-        printf("nread=%d,\"%s\"\n", res, buf);
-        // if (res ==1)
-        // STOP = 1;       /*stop loop if only a CR was input */
-        wait_flag = flag; /*wait for new input */
+        usleep(100000); // ms
+        // after receiving SIGIO, wait_flag = FALSE, input is available and can be read
+        if(0 != wait_flag) {
+            continue;
         }
+
+        memset(buf, 0, sizeof(buf));
+        res = read(fd, buf, 1024);
+        if(res <= 0) {
+            cout << "Failed to read Com port." << endl;
+            continue;
+        }
+        printf("Got %d char:\"%s\"\n", res, buf);
+        // if(1 == res)
+            // STOP = 1;        /* stop loop if only a CR was input */
+        wait_flag = flag;       /* wait for new input */
     }
 
     close(fd);
