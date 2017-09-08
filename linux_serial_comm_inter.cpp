@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <iostream>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -9,6 +10,10 @@
 #include <termios.h>
 #include <errno.h>
 
+using std::cout;
+using std::endl;
+using std::string;
+
 #define FALSE -1
 #define TRUE 0
 #define flag 1
@@ -18,10 +23,10 @@ int wait_flag = noflag;
 int STOP = 0;
 int res;
 
-int speed_arr[] = {
+const int speed_arr[] = {
     B38400, B19200, B9600, B4800, B2400, B1200, B300, B38400, B19200, B9600, B4800, B2400, B1200, B300
 };
-int name_arr[] = {
+const int name_arr[] = {
     38400, 19200, 9600, 4800, 2400, 1200, 300, 38400, 19200, 9600, 4800, 2400, 1200, 300
 };
 
@@ -117,24 +122,25 @@ int set_parity(int fd, int databits, int stopbits, int parity) {
 }
 
 void signal_handler_IO(int status) {
-    printf("Received SIGIO signal.\n");
+    // printf("Received SIGIO signal.\n");
     wait_flag = noflag;
 }
 
-int main(){
+int main() {
     printf("This program updates last time at %s   %s\n", __TIME__, __DATE__);
-    printf("STDIO COM1\n");
+    // printf("STDIO COM1\n");
     int fd;
     struct sigaction saio;
 
     fd = open("/dev/ttyS0", O_RDONLY | O_NONBLOCK);
     if(-1 == fd) {
         perror("Failed to open serial port.\n");
-        exit 1;
+        exit(1);
     }
-    printf("Open ");
-    printf("%s", ttyname(fd));
-    printf("successfully.\n");
+    // printf("Open ");
+    // printf("%s", ttyname(fd));
+    // printf(" successfully.\n");
+    cout << "Open " << ttyname(fd) << " successfully." << endl;
 
     saio.sa_handler = signal_handler_IO;
     sigemptyset(&saio.sa_mask);
@@ -150,12 +156,17 @@ int main(){
     set_speed(fd, 115200);
     if(FALSE == set_parity(fd, 8, 1, 'N')) {
         printf("Failed to set parity error.\n");
-        exit 1;
+        exit(1);
     }
 
     char buf[1024];
+    string frameBuf;
+    long freq = 0;
+    timespec t1, t2;
+    long last_time_ns;
+
     while(0 == STOP) {
-        usleep(100000); // ms
+        // usleep(100000); // ms
         // after receiving SIGIO, wait_flag = FALSE, input is available and can be read
         if(0 != wait_flag) {
             continue;
@@ -164,10 +175,31 @@ int main(){
         memset(buf, 0, sizeof(buf));
         res = read(fd, buf, 1024);
         if(res <= 0) {
-            cout << "Failed to read Com port." << endl;
+            cout << "Failed to read Com port, with return code: " << res << endl;
             continue;
         }
-        printf("Got %d char:\"%s\"\n", res, buf);
+        // printf("Got %d char:\"%s\"\n", res, buf);
+
+        frameBuf += string(buf);
+        // frame header
+        if('$' == buf[0]) {
+            frameBuf = string(buf);
+            // calculate frame frequency
+            clock_gettime(CLOCK_MONOTONIC, &t2);
+            // cout << "time_end  :" << t2.tv_nsec << endl;
+            freq = 1000000000 / (t2.tv_nsec - last_time_ns);
+            cout << "The Freq is: " << freq << endl;
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            // cout << "time_start:" << t1.tv_nsec << endl;
+            last_time_ns = t1.tv_nsec;
+        }
+        // frame footer
+        if('\n' == buf[res - 1]) {
+            // remove "\r\n"
+            frameBuf = frameBuf.substr(0, frameBuf.length() - 2);
+            cout << frameBuf << endl;
+        }
+
         // if(1 == res)
             // STOP = 1;        /* stop loop if only a CR was input */
         wait_flag = flag;       /* wait for new input */
